@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gestão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --bg: #14140f;
+    --panel: #1c1c16;
+    --panel-2: #242419;
+    --line: #33331f;
+    --ink: #ece7d8;
+    --ink-dim: #a39d87;
+    --accent: #c9a24b;
+    --accent-dim: #8a713a;
+    --ok: #6f9c6a;
+    --warn: #b56a4f;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;}
+  ::selection{background:var(--accent);color:#14140f;}
+
+  /* SHELL */
+  #shell{display:none;min-height:100vh;grid-template-columns:250px 1fr;grid-template-rows:56px 1fr;}
+  header{grid-column:1/3;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 20px;}
+  header .brand{font-family:'Playfair Display',serif;font-weight:700;font-size:18px;}
+
+  nav#sidebar{background:var(--panel);border-right:1px solid var(--line);padding:18px 0;display:flex;flex-direction:column;gap:4px;}
+  nav#sidebar button.nav-btn{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;background:none;border:none;color:var(--ink-dim);padding:10px 20px;font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;border-left:3px solid transparent;}
+  nav#sidebar button.nav-btn:hover{color:var(--ink);background:var(--panel-2);}
+  nav#sidebar button.nav-btn.active{color:var(--accent);border-left-color:var(--accent);background:var(--panel-2);font-weight:600;}
+
+  /* ESTRUTURA DOS GRUPOS NA LATERAL */
+  .nav-group-title{
+    padding:12px 20px 6px 20px;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.8px;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:10px;
+  }
+  .nav-group-title::before{
+    content:'';
+    display:inline-block;
+    width:6px;
+    height:6px;
+    background:var(--accent);
+    border-radius:50%;
+  }
+
+  /* SUB-ITENS DA LATERAL */
+  .subnav-container{display:flex;flex-direction:column;}
+  .subnav-container.hidden{display:none;}
+  .subnav-container button{
+    display:flex;
+    align-items:center;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    padding:8px 20px 8px 32px;
+    font-size:13px;
+    color:var(--ink-dim);
+    border-left:3px solid transparent;
+    position:relative;
+    cursor:pointer;
+    font-family:'DM Sans',sans-serif;
+  }
+  .subnav-container button::before{
+    content:'';
+    position:absolute;
+    left:20px;
+    top:50%;
+    width:4px;
+    height:4px;
+    border-radius:50%;
+    background:var(--line);
+    transform:translateY(-50%);
+  }
+  .subnav-container button:hover{color:var(--ink);background:var(--panel-2);}
+  .subnav-container button.active{color:var(--accent);font-weight:600;background:var(--panel-2);border-left-color:var(--accent);}
+  .subnav-container button.active::before{background:var(--accent);}
+
+  /* ÍCONE DE SETA / EXPANSÃO */
+  .arrow-icon{font-size:10px;transition:transform 0.2s;}
+  .nav-btn.open .arrow-icon{transform:rotate(90deg);}
+
+  main{padding:28px 32px;overflow-y:auto;}
+  section.view{display:none;}
+  section.view.active{display:block;}
+  h2{font-family:'Playfair Display',serif;font-size:24px;margin:0 0 4px;}
+  p.lead{color:var(--ink-dim);font-size:14px;margin:0 0 24px;}
+
+  .card{background:var(--panel);border:1px solid var(--line);padding:22px;margin-bottom:20px;}
+  .card h3{margin:0 0 16px;font-size:15px;text-transform:none;color:var(--ink);font-weight:600;}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:160px;flex:1;}
+  .field label{font-size:12px;color:var(--ink-dim);}
+  .field input, .field select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:9px 10px;font-size:14px;font-family:'DM Sans',sans-serif;}
+
+  button.primary{background:var(--accent);color:#14140f;border:none;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;}
+  button.primary:hover{background:#dcb463;}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ink-dim);padding:9px 16px;font-size:13px;cursor:pointer;}
+  button.ghost:hover{color:var(--ink);border-color:var(--accent-dim);}
+  button.ghost.active{color:var(--accent);border-color:var(--accent);}
+  button.danger{background:none;border:1px solid var(--warn);color:var(--warn);padding:5px 10px;font-size:12px;cursor:pointer;}
+
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;}
+  th{text-align:left;color:var(--ink-dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:0.4px;padding:8px 10px;border-bottom:1px solid var(--line);}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);font-family:'DM Mono',monospace;font-size:12.5px;}
+  tr:hover td{background:var(--panel-2);}
+  .empty{color:var(--ink-dim);font-size:13px;padding:20px 0;text-align:center;border:1px dashed var(--line);}
+
+  .pill{font-family:'DM Mono',monospace;font-size:11px;padding:2px 8px;border:1px solid var(--line);color:var(--ink-dim);}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .msg{font-size:12.5px;margin-top:8px;}
+  .msg.ok{color:var(--ok);}
+  .msg.warn{color:var(--warn);}
+
+  #shell.active{display:grid;}
+  body:not(.is-adm) .adm-only{display:none !important;}
+  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:28px;}
+  #login-screen h1{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;margin:0;}
+  #login-screen .sub{color:var(--ink-dim);font-size:14px;margin-top:-18px;}
+  .login-box{background:var(--panel);border:1px solid var(--line);padding:32px;width:340px;display:flex;flex-direction:column;gap:14px;}
+  .login-box .tabs{display:flex;gap:8px;} .login-box .tabs button{flex:1;}
+  header .who{font-size:13px;color:var(--ink-dim);display:flex;align-items:center;gap:14px;}
+  header .who .badge{border:1px solid var(--accent-dim);color:var(--accent);padding:2px 8px;font-size:11px;font-family:'DM Mono',monospace;text-transform:uppercase;}
+  header .who button{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:13px;text-decoration:underline;}
+  .field.checks{flex-direction:row;flex-wrap:wrap;gap:10px 18px;align-items:center;min-width:100%;}
+  .field.checks label{display:flex;gap:6px;align-items:center;color:var(--ink);font-size:13px;}
+  td select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:5px 8px;font-size:12.5px;}
+  .pill.ok{color:#8fc98a;border-color:#26401f;} .pill.pend{color:#d9a441;border-color:#5c471c;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div style="text-align:center;"><h1>Sistema de Gestão</h1><div class="sub">acesso por usuário</div></div>
+  <div class="login-box">
+    <div class="tabs">
+      <button class="ghost active" id="tab-entrar" onclick="loginTab('entrar')">Entrar</button>
+      <button class="ghost" id="tab-criar" onclick="loginTab('criar')">Criar conta</button>
+    </div>
+    <div class="field" id="lg-nome-wrap" style="display:none;"><label>Nome</label><input id="lg-nome" placeholder="Nome completo"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="lg-email" placeholder="voce@email.com"></div>
+    <div class="field"><label>Senha</label><input type="password" id="lg-pass" placeholder="••••••" onkeydown="if(event.key==='Enter')loginSubmit()"></div>
+    <button class="primary" id="lg-btn" onclick="loginSubmit()">Entrar</button>
+    <div class="msg" id="login-msg"></div>
+    <div id="cfg-warn" class="msg warn" style="display:none;">Supabase não configurado. Preencha SUPABASE_URL e SUPABASE_ANON_KEY no início do script deste arquivo.</div>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div id="shell">
+  <header>
+    <div class="brand">Sistema de Gestão</div>
+    <div class="who"><span id="who-name"></span><span class="badge" id="who-level"></span><button onclick="doLogout()">sair</button></div>
+  </header>
+
+  <nav id="sidebar">
+    <button class="nav-btn adm-only" data-view="v-usuarios" onclick="showView('v-usuarios')"><span>Usuários e acessos</span></button>
+    <!-- DEPARTAMENTOS -->
+    <button class="nav-btn active" id="btn-toggle-depts" onclick="toggleDeptsMenu()">
+      <span>Lista de departamentos</span>
+      <span class="arrow-icon">▶</span>
+    </button>
+    <div id="sidebar-depts" class="subnav-container">
+      <button data-dept-campus="TODOS" class="active" onclick="selectDeptCampusFilter('TODOS')">Todos os Departamentos</button>
+      <button data-dept-campus="EC" onclick="selectDeptCampusFilter('EC')">Campus EC</button>
+      <button data-dept-campus="SP" onclick="selectDeptCampusFilter('SP')">Campus SP</button>
+      <button data-dept-campus="HT" onclick="selectDeptCampusFilter('HT')">Campus HT</button>
+    </div>
+
+    <!-- SEÇÃO DE LANÇAMENTOS -->
+    <div class="nav-group-title">Incluir Lançamento</div>
+    <div id="sidebar-modulos" class="subnav-container"></div>
+
+    <button class="nav-btn adm-only" data-view="v-cadastrar-modulo" onclick="showView('v-cadastrar-modulo')">
+      <span>Gerenciar Módulos</span>
+    </button>
+
+    <!-- RELATÓRIOS -->
+    <button class="nav-btn" id="btn-toggle-relatorios" onclick="toggleRelatoriosMenu()">
+      <span>Relatórios</span>
+      <span class="arrow-icon">▶</span>
+    </button>
+    <div id="sidebar-relatorios" class="subnav-container hidden">
+      <button data-rel="contabil" onclick="selectRelatorio('contabil')">Excel — Contábil</button>
+      <button data-rel="detalhado" onclick="selectRelatorio('detalhado')">Excel — Detalhado</button>
+      <button data-rel="pdf" onclick="selectRelatorio('pdf')">Exportar PDF</button>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- DEPARTAMENTOS -->
+    <section class="view active" id="v-departamentos">
+      <h2 id="d-view-title">Lista de departamentos</h2>
+      <p class="lead">Cadastro manual ou importação via planilha Excel. Escolha o campus correspondente.</p>
+
+      <div class="card adm-only">
+        <h3>Adicionar departamento</h3>
+        <div class="row">
+          <div class="field"><label>Código</label><input id="d-codigo" placeholder="ex: 010"></div>
+          <div class="field" style="flex:2;"><label>Nome</label><input id="d-nome" placeholder="ex: Produção"></div>
+          <div class="field">
+            <label>Campus</label>
+            <select id="d-campus">
+              <option value="EC">EC</option>
+              <option value="SP">SP</option>
+              <option value="HT">HT</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;"><button class="primary" onclick="addDept()">Adicionar</button></div>
+        <div class="msg" id="d-msg"></div>
+      </div>
+
+      <div class="card adm-only">
+        <h3>Importar via Excel</h3>
+        <p style="color:var(--ink-dim);font-size:12.5px;margin:0 0 12px;">
+          A planilha deve conter as colunas <b>Código</b>, <b>Nome</b> e <b>Campus</b> (opcional, padrão EC se não informado).
+        </p>
+        <input type="file" id="d-import-file" accept=".xlsx,.xls,.csv" onchange="importDepartamentos(event)">
+        <div class="msg" id="d-import-msg"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <h3 style="margin:0;">Departamentos cadastrados</h3>
+          <div class="filters">
+            <button class="ghost active" id="f-tab-TODOS" onclick="selectDeptCampusFilter('TODOS')">Todos</button>
+            <button class="ghost" id="f-tab-EC" onclick="selectDeptCampusFilter('EC')">EC</button>
+            <button class="ghost" id="f-tab-SP" onclick="selectDeptCampusFilter('SP')">SP</button>
+            <button class="ghost" id="f-tab-HT" onclick="selectDeptCampusFilter('HT')">HT</button>
+          </div>
+        </div>
+        <div id="d-table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- USUÁRIOS E ACESSOS -->
+    <section class="view" id="v-usuarios">
+      <h2>Usuários e acessos</h2>
+      <p class="lead">Quem cria conta na tela de login aparece aqui como pendente. Libere o acesso e marque os módulos que cada usuário pode usar.</p>
+      <div class="card">
+        <h3>Usuários cadastrados</h3>
+        <div class="msg" id="u-msg"></div>
+        <div id="u-table-wrap"></div>
+      </div>
+      <div class="card" id="u-edit-card" style="display:none;">
+        <h3 id="u-edit-title"></h3>
+        <div class="field checks" id="u-edit-checks"></div>
+        <div style="margin-top:14px;display:flex;gap:10px;">
+          <button class="primary" onclick="saveUserModules()">Salvar</button>
+          <button class="ghost" onclick="cancelEditUser()">Cancelar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- LANÇAMENTOS -->
+    <section class="view" id="v-lancamentos">
+      <h2>Incluir lançamentos</h2>
+      <p class="lead">Lançamentos específicos do módulo selecionado.</p>
+
+      <div class="card" id="card-form-lancamento">
+        <h3 id="mod-title" style="margin-bottom:4px;">—</h3>
+        <p style="color:var(--ink-dim);font-size:12.5px;margin:0 0 16px;" id="mod-lead"></p>
+        <div class="row" id="form-fields"></div>
+        <div style="margin-top:16px;"><button class="primary" onclick="addLancamento()">Incluir lançamento</button></div>
+        <div class="msg" id="l-msg"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <h3 style="margin:0;">Lançamentos do módulo</h3>
+          <button class="ghost" onclick="exportModulo()">Exportar Excel deste módulo</button>
+        </div>
+        <div id="l-table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- CADASTRAR / REMOVER MÓDULO -->
+    <section class="view" id="v-cadastrar-modulo">
+      <h2>Gerenciar módulos</h2>
+      <p class="lead">Crie novos módulos customizados ou apague módulos existentes.</p>
+
+      <div class="card">
+        <h3>Informações do módulo</h3>
+        <div class="row">
+          <div class="field"><label>Nome do módulo</label><input id="m-nome" placeholder="ex: Papelaria - EC"></div>
+          <div class="field">
+            <label>Usa unidade de medida (L/ml)?</label>
+            <select id="m-unidade"><option value="nao">Não</option><option value="sim">Sim</option></select>
+          </div>
+          <div class="field">
+            <label>Campus fixo</label>
+            <select id="m-campus"><option value="">Perguntar no lançamento</option><option value="EC">EC</option><option value="SP">SP</option><option value="HT">HT</option></select>
+          </div>
+        </div>
+        <div style="margin-top:16px;"><button class="primary" onclick="addModulo()">Adicionar módulo</button></div>
+        <div id="m-msg" class="msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Módulos cadastrados no sistema</h3>
+        <div id="m-table-wrap"></div>
+      </div>
+
+      <div class="card">
+        <h3>Produtos por módulo</h3>
+        <p style="color:var(--ink-dim);font-size:12.5px;margin:0 0 12px;">Produtos cadastrados aqui aparecem como sugestão no lançamento. Produtos digitados direto no lançamento também entram na lista.</p>
+        <div class="row">
+          <div class="field"><label>Módulo</label><select id="p-modulo" onchange="renderProdutos()"></select></div>
+          <div class="field" style="flex:2;"><label>Produto</label><input id="p-nome" placeholder="ex: Cópia A4"></div>
+        </div>
+        <div style="margin-top:12px;"><button class="ghost" onclick="addProduto()">Adicionar produto</button></div>
+        <div class="msg" id="p-msg"></div>
+        <div id="p-table-wrap"></div>
+      </div>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section class="view" id="v-relatorios">
+      <h2 id="r-view-title">Relatórios</h2>
+      <p class="lead" id="r-view-desc">Filtre os lançamentos e gere o relatório no formato selecionado.</p>
+
+      <div class="card">
+        <h3>Filtros de busca</h3>
+        <div class="filters">
+          <div class="field"><label>Módulo</label><select id="r-modulo" onchange="renderRelatorioPreview()"></select></div>
+          <div class="field"><label>De</label><input type="date" id="r-de" onchange="renderRelatorioPreview()"></div>
+          <div class="field"><label>Até</label><input type="date" id="r-ate" onchange="renderRelatorioPreview()"></div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <button class="primary" id="btn-export-relatorio" onclick="executarExportacao()">Exportar Relatório</button>
+        </div>
+        <div class="msg" id="r-msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Prévia dos dados selecionados</h3>
+        <div id="r-table-wrap"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+/* ========== CONFIGURAÇÃO SUPABASE ========== */
+// Cole aqui os dados do seu projeto (Supabase > Project Settings > API)
+const SUPABASE_URL = 'COLE_AQUI_A_URL_DO_PROJETO';
+const SUPABASE_ANON_KEY = 'COLE_AQUI_A_ANON_KEY';
+const CONFIGURADO = !SUPABASE_URL.startsWith('COLE_');
+const sb = CONFIGURADO ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+/* ---------- estado ---------- */
+let db = {departamentos:[], modulos:[], produtos:{}, lancamentos:[], profiles:[], userModulos:{}};
+let me = null;
+let activeModuloId = null;
+let activeRelatorioTipo = 'contabil';
+let activeDeptCampusFilter = 'TODOS';
+let editingUserId = null;
+let loginMode = 'entrar';
+
+const $ = id => document.getElementById(id);
+const isAdm = () => !!me && me.nivel === 'adm';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = v => Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const NIVEIS = {adm:'Administrador', consultor:'Consultor', coordenador:'Coordenador'};
+const FONTE = "font-family:'DM Sans',sans-serif;";
+function setMsg(id, text, cls){ const e = $(id); e.textContent = text; e.className = 'msg ' + (cls || ''); }
+function getAllModulos(){ return db.modulos; }
+function findModulo(id){ return db.modulos.find(m => String(m.id) === String(id)); }
+
+/* ---------- carga de dados ---------- */
+async function fetchAll(table, order){
+  let out = [], from = 0;
+  while(true){
+    const {data, error} = await sb.from(table).select('*').order(order).range(from, from + 999);
+    if(error) throw error;
+    out = out.concat(data);
+    if(data.length < 1000) break;
+    from += 1000;
+  }
+  return out;
+}
+function mapLanc(l){
+  const m = findModulo(l.modulo_id);
+  return {id:l.id, moduloId:l.modulo_id, modulo:m ? m.nome : l.modulo_id, data:l.data, codigo:l.codigo,
+    departamento:l.departamento, produto:l.produto, servico:l.servico, unidade:l.unidade,
+    campus:l.campus, valor:Number(l.valor), criadoPor:l.criado_por};
+}
+async function loadAll(){
+  const [deps, mods, prods, lancs, um] = await Promise.all([
+    fetchAll('departamentos','id'), fetchAll('modulos','nome'), fetchAll('produtos','nome'),
+    fetchAll('lancamentos','id'), fetchAll('user_modulos','user_id')
+  ]);
+  db.departamentos = deps;
+  db.modulos = mods.map(m => ({id:m.id, nome:m.nome, unidade:m.unidade, campusFixo:m.campus_fixo}));
+  db.produtos = {};
+  prods.forEach(p => (db.produtos[p.modulo_id] = db.produtos[p.modulo_id] || []).push(p));
+  db.lancamentos = lancs.map(mapLanc);
+  db.userModulos = {};
+  um.forEach(r => (db.userModulos[r.user_id] = db.userModulos[r.user_id] || []).push(r.modulo_id));
+  db.profiles = [];
+  if(isAdm()){
+    const {data, error} = await sb.from('profiles').select('*').order('nome');
+    if(error) throw error;
+    db.profiles = data;
+  }
+}
+
+/* ---------- login ---------- */
+function mostrarLogin(){ $('shell').classList.remove('active'); $('login-screen').style.display = 'flex'; }
+function loginTab(mode){
+  loginMode = mode;
+  $('tab-entrar').classList.toggle('active', mode === 'entrar');
+  $('tab-criar').classList.toggle('active', mode === 'criar');
+  $('lg-nome-wrap').style.display = mode === 'criar' ? 'flex' : 'none';
+  $('lg-btn').textContent = mode === 'criar' ? 'Criar conta' : 'Entrar';
+  setMsg('login-msg', '');
+}
+async function loginSubmit(){
+  if(!CONFIGURADO) return;
+  const email = $('lg-email').value.trim(), senha = $('lg-pass').value;
+  if(!email || !senha){ setMsg('login-msg','Informe e-mail e senha.','warn'); return; }
+  setMsg('login-msg','Aguarde...');
+  if(loginMode === 'criar'){
+    const nome = $('lg-nome').value.trim();
+    if(!nome){ setMsg('login-msg','Informe seu nome.','warn'); return; }
+    if(senha.length < 6){ setMsg('login-msg','A senha deve ter ao menos 6 caracteres.','warn'); return; }
+    const {error} = await sb.auth.signUp({email, password:senha, options:{data:{nome}}});
+    if(error){ setMsg('login-msg', error.message, 'warn'); return; }
+    await sb.auth.signOut();
+    loginTab('entrar');
+    setMsg('login-msg','Conta criada. Aguarde o administrador liberar seu acesso.','ok');
+    return;
+  }
+  const {error} = await sb.auth.signInWithPassword({email, password:senha});
+  if(error){ setMsg('login-msg','E-mail ou senha incorretos.','warn'); return; }
+  await boot();
+}
+async function boot(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ mostrarLogin(); return; }
+  const {data:p} = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+  if(!p){ await sb.auth.signOut(); mostrarLogin(); setMsg('login-msg','Perfil não encontrado. Fale com o administrador.','warn'); return; }
+  if(!p.ativo){ await sb.auth.signOut(); mostrarLogin(); setMsg('login-msg','Seu acesso ainda não foi liberado pelo administrador.','warn'); return; }
+  me = p;
+  try{ await loadAll(); }
+  catch(e){ await sb.auth.signOut(); mostrarLogin(); setMsg('login-msg','Erro ao carregar dados: ' + e.message,'warn'); return; }
+  document.body.classList.toggle('is-adm', isAdm());
+  $('who-name').textContent = me.nome;
+  $('who-level').textContent = NIVEIS[me.nivel];
+  $('lg-pass').value = '';
+  $('login-screen').style.display = 'none';
+  $('shell').classList.add('active');
+  renderAll();
+  selectDeptCampusFilter('TODOS');
+}
+async function doLogout(){
+  await sb.auth.signOut();
+  me = null; document.body.classList.remove('is-adm');
+  mostrarLogin(); setMsg('login-msg','');
+}
+
+/* ---------- usuários e acessos (só Adm) ---------- */
+function renderUsuarios(){
+  if(!isAdm()) return;
+  $('u-table-wrap').innerHTML = `<table><thead><tr><th>Nome</th><th>E-mail</th><th>Nível</th><th>Status</th><th>Módulos</th><th></th></tr></thead><tbody>
+  ${db.profiles.map(p => {
+    const self = p.id === me.id;
+    const mods = p.nivel === 'adm' ? 'todos' : ((db.userModulos[p.id] || []).map(id => { const m = findModulo(id); return m ? m.nome : id; }).join(', ') || '—');
+    return `<tr><td style="${FONTE}">${esc(p.nome)}</td><td>${esc(p.email)}</td>
+    <td><select onchange="setNivel('${p.id}',this.value)" ${self ? 'disabled' : ''}>${Object.entries(NIVEIS).map(([k,v]) => `<option value="${k}" ${p.nivel === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+    <td><span class="pill ${p.ativo ? 'ok' : 'pend'}">${p.ativo ? 'ativo' : 'pendente'}</span></td>
+    <td style="${FONTE}">${esc(mods)}</td>
+    <td>${p.nivel !== 'adm' ? `<button class="ghost" onclick="editUserModules('${p.id}')">módulos</button> ` : ''}${self ? '' : `<button class="${p.ativo ? 'danger' : 'primary'}" onclick="toggleAtivo('${p.id}',${!p.ativo})">${p.ativo ? 'desativar' : 'liberar acesso'}</button>`}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+async function updateProfile(id, campos){
+  const {data, error} = await sb.from('profiles').update(campos).eq('id', id).select();
+  if(error || !data.length){ setMsg('u-msg', 'Erro: ' + (error ? error.message : 'sem permissão.'), 'warn'); return false; }
+  Object.assign(db.profiles.find(p => p.id === id), campos);
+  setMsg('u-msg','Salvo.','ok');
+  return true;
+}
+async function setNivel(id, nivel){ await updateProfile(id, {nivel}); renderUsuarios(); }
+async function toggleAtivo(id, ativo){ await updateProfile(id, {ativo}); renderUsuarios(); }
+function editUserModules(id){
+  const p = db.profiles.find(x => x.id === id);
+  if(!p) return;
+  editingUserId = id;
+  const sel = db.userModulos[id] || [];
+  $('u-edit-title').textContent = 'Módulos liberados para ' + p.nome;
+  $('u-edit-checks').innerHTML = db.modulos.map(m => `<label><input type="checkbox" class="u-edit-check" value="${esc(m.id)}" ${sel.includes(m.id) ? 'checked' : ''}> ${esc(m.nome)}</label>`).join('');
+  $('u-edit-card').style.display = 'block';
+  $('u-edit-card').scrollIntoView({behavior:'smooth'});
+}
+async function saveUserModules(){
+  const id = editingUserId; if(!id) return;
+  const sel = [...document.querySelectorAll('.u-edit-check:checked')].map(c => c.value);
+  let r = await sb.from('user_modulos').delete().eq('user_id', id);
+  if(!r.error && sel.length) r = await sb.from('user_modulos').insert(sel.map(modulo_id => ({user_id:id, modulo_id})));
+  if(r.error){ setMsg('u-msg','Erro: ' + r.error.message,'warn'); return; }
+  db.userModulos[id] = sel;
+  cancelEditUser(); setMsg('u-msg','Módulos atualizados.','ok'); renderUsuarios();
+}
+function cancelEditUser(){ editingUserId = null; $('u-edit-card').style.display = 'none'; }
+
+/* ---------- departamentos ---------- */
+function renderDepts(){
+  const wrap = $('d-table-wrap');
+  let list = db.departamentos;
+  if(activeDeptCampusFilter !== 'TODOS') list = list.filter(d => d.campus === activeDeptCampusFilter);
+  if(!list.length){ wrap.innerHTML = `<div class="empty">Nenhum departamento cadastrado ${activeDeptCampusFilter !== 'TODOS' ? 'para o Campus ' + activeDeptCampusFilter : ''}.</div>`; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Campus</th><th>Código</th><th>Nome</th><th></th></tr></thead><tbody>
+  ${list.map(d => `<tr><td><span class="pill">${esc(d.campus)}</span></td><td>${esc(d.codigo)}</td><td style="${FONTE}">${esc(d.nome)}</td>
+  <td>${isAdm() ? `<button class="danger" onclick="removeDept(${d.id})">remover</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+async function addDept(){
+  const codigo = $('d-codigo').value.trim(), nome = $('d-nome').value.trim(), campus = $('d-campus').value;
+  if(!codigo || !nome){ setMsg('d-msg','Preencha código e nome.','warn'); return; }
+  if(db.departamentos.some(d => d.codigo === codigo && d.campus === campus)){ setMsg('d-msg', `Código já existe no Campus ${campus}.`,'warn'); return; }
+  const {data, error} = await sb.from('departamentos').insert({codigo, nome, campus}).select().single();
+  if(error){ setMsg('d-msg','Erro: ' + error.message,'warn'); return; }
+  db.departamentos.push(data);
+  $('d-codigo').value = ''; $('d-nome').value = '';
+  setMsg('d-msg','Departamento adicionado com sucesso.','ok');
+  renderDepts(); renderForm(findModulo(activeModuloId));
+}
+async function removeDept(id){
+  const {error} = await sb.from('departamentos').delete().eq('id', id);
+  if(error){ alert('Erro: ' + error.message); return; }
+  db.departamentos = db.departamentos.filter(d => d.id !== id);
+  renderDepts(); renderForm(findModulo(activeModuloId));
+}
+function importDepartamentos(evt){
+  const file = evt.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+      const novos = [], vistos = new Set(db.departamentos.map(d => d.campus + '|' + d.codigo));
+      let skipped = 0;
+      rows.forEach(r => {
+        const codigo = String(r['Código'] ?? r['Codigo'] ?? r['codigo'] ?? '').trim();
+        const nome = String(r['Nome'] ?? r['nome'] ?? '').trim();
+        let campus = String(r['Campus'] ?? r['campus'] ?? 'EC').trim().toUpperCase();
+        if(!['EC','SP','HT'].includes(campus)) campus = 'EC';
+        const k = campus + '|' + codigo;
+        if(!codigo || !nome || vistos.has(k)){ skipped++; return; }
+        vistos.add(k); novos.push({codigo, nome, campus});
+      });
+      if(novos.length){
+        const {data, error} = await sb.from('departamentos').insert(novos).select();
+        if(error) throw error;
+        db.departamentos.push(...data);
+      }
+      setMsg('d-import-msg', `${novos.length} departamento(s) importado(s)${skipped ? `, ${skipped} ignorado(s) (duplicado ou incompleto)` : ''}.`,'ok');
+      renderDepts(); renderForm(findModulo(activeModuloId));
+    }catch(err){ setMsg('d-import-msg','Não foi possível importar: ' + (err.message || 'verifique o formato.'),'warn'); }
+    evt.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+}
+function populateDeptSelectForCampus(campus){
+  const dl = $('dl-departamentos'), input = $('f-departamento-input');
+  if(!dl || !input) return;
+  input.value = '';
+  const lista = db.departamentos.filter(d => d.campus === campus);
+  if(!lista.length){ dl.innerHTML = ''; input.placeholder = `Nenhum departamento no Campus ${campus}`; return; }
+  input.placeholder = 'Digite o código ou nome...';
+  dl.innerHTML = lista.map(d => `<option value="${esc(d.codigo + ' - ' + d.nome)}"></option>`).join('');
+}
+function onCampusChangeInForm(){ const c = $('f-campus'); if(c) populateDeptSelectForCampus(c.value); }
+
+/* ---------- módulos na lateral e formulário ---------- */
+function renderModSubnav(){
+  const nav = $('sidebar-modulos'), todos = db.modulos;
+  nav.innerHTML = todos.length
+    ? todos.map(m => `<button data-mod="${esc(m.id)}" onclick="selectModuloAndShow('${esc(m.id)}')">${esc(m.nome)}</button>`).join('')
+    : '<div style="padding:8px 20px;font-size:12px;color:var(--ink-dim);">Nenhum módulo liberado para você.</div>';
+  if(todos.length){
+    if(!findModulo(activeModuloId)) activeModuloId = todos[0].id;
+    selectModulo(activeModuloId);
+  } else { activeModuloId = null; renderForm(null); renderLancamentos(); }
+}
+function selectModulo(id){
+  activeModuloId = id;
+  document.querySelectorAll('#sidebar button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#sidebar-modulos button').forEach(b => b.classList.toggle('active', String(b.dataset.mod) === String(id)));
+  const m = findModulo(id); if(!m) return;
+  $('mod-title').textContent = m.nome;
+  $('mod-lead').textContent = 'Digite ou selecione um Departamento cadastrado' + (m.campusFixo ? ` do Campus ${m.campusFixo}` : '') + ', Produto, Histórico e valor.';
+  renderForm(m); renderLancamentos();
+}
+function renderForm(m){
+  const wrap = $('form-fields');
+  if(!m){ wrap.innerHTML = '<div class="empty" style="width:100%;">Nenhum módulo liberado para você.</div>'; return; }
+  let html = '';
+  if(!m.campusFixo) html += `<div class="field"><label>Campus</label><select id="f-campus" onchange="onCampusChangeInForm()"><option value="EC">EC</option><option value="SP">SP</option><option value="HT">HT</option></select></div>`;
+  html += `
+    <div class="field" style="flex:3;"><label>Departamento (${m.campusFixo ? `Campus ${m.campusFixo}` : 'conforme campus selecionado'})</label>
+      <input id="f-departamento-input" list="dl-departamentos" placeholder="Digite o código ou nome..." autocomplete="off"><datalist id="dl-departamentos"></datalist></div>
+    <div class="field"><label>Data</label><input type="date" id="f-data"></div>
+    <div class="field" style="flex:2;"><label>Produto</label><input id="f-produto" list="dl-produtos" placeholder="escolha ou digite o produto" autocomplete="off"><datalist id="dl-produtos"></datalist></div>
+    <div class="field" style="flex:2;"><label>Histórico</label><input id="f-servico" placeholder="serviço / descrição do lançamento"></div>`;
+  if(m.unidade) html += `<div class="field"><label>Unidade de medida</label><select id="f-unidade"><option value="L">L</option><option value="ml">ml</option></select></div>`;
+  html += `<div class="field"><label>Valor (R$)</label><input type="number" step="0.01" id="f-valor" placeholder="0,00"></div>`;
+  wrap.innerHTML = html;
+  fillProdutosDatalist(m.id);
+  populateDeptSelectForCampus(m.campusFixo || 'EC');
+}
+function fillProdutosDatalist(id){
+  const dl = $('dl-produtos'); if(!dl) return;
+  dl.innerHTML = (db.produtos[id] || []).map(p => `<option value="${esc(p.nome)}"></option>`).join('');
+}
+
+/* ---------- gerenciar módulos e produtos (só Adm) ---------- */
+async function addModulo(){
+  const nome = $('m-nome').value.trim(), unidade = $('m-unidade').value === 'sim', campusFixo = $('m-campus').value || null;
+  if(!nome){ setMsg('m-msg','Informe o nome do módulo.','warn'); return; }
+  if(db.modulos.some(m => m.nome.toLowerCase() === nome.toLowerCase())){ setMsg('m-msg','Já existe um módulo com esse nome.','warn'); return; }
+  const id = 'custom-' + Date.now();
+  const {error} = await sb.from('modulos').insert({id, nome, unidade, campus_fixo:campusFixo});
+  if(error){ setMsg('m-msg','Erro: ' + error.message,'warn'); return; }
+  db.modulos.push({id, nome, unidade, campusFixo});
+  db.modulos.sort((a,b) => a.nome.localeCompare(b.nome));
+  $('m-nome').value = '';
+  setMsg('m-msg','Módulo adicionado. Libere-o para os usuários em "Usuários e acessos".','ok');
+  renderAll();
+}
+async function deleteModulo(id){
+  const m = findModulo(id); if(!m) return;
+  const qtd = db.lancamentos.filter(l => String(l.moduloId) === String(id)).length;
+  if(!confirm(`Apagar o módulo "${m.nome}"?` + (qtd ? ` Os ${qtd} lançamento(s) dele também serão apagados.` : ''))) return;
+  const {error} = await sb.from('modulos').delete().eq('id', id);
+  if(error){ setMsg('m-msg','Erro: ' + error.message,'warn'); return; }
+  db.modulos = db.modulos.filter(x => String(x.id) !== String(id));
+  db.lancamentos = db.lancamentos.filter(l => String(l.moduloId) !== String(id));
+  delete db.produtos[id];
+  Object.keys(db.userModulos).forEach(u => db.userModulos[u] = db.userModulos[u].filter(x => x !== id));
+  renderAll();
+}
+function renderModulosList(){
+  const wrap = $('m-table-wrap');
+  if(!db.modulos.length){ wrap.innerHTML = '<div class="empty">Nenhum módulo existente.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Unidade (L/ml)</th><th>Campus Fixo</th><th></th></tr></thead><tbody>
+  ${db.modulos.map(m => `<tr><td style="${FONTE}">${esc(m.nome)}</td><td>${m.unidade ? 'Sim' : 'Não'}</td>
+  <td>${m.campusFixo ? `<span class="pill">${esc(m.campusFixo)}</span>` : 'Flexível'}</td>
+  <td><button class="danger" onclick="deleteModulo('${esc(m.id)}')">apagar</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function registrarProduto(moduloId, nome){
+  const lista = db.produtos[moduloId] || (db.produtos[moduloId] = []);
+  if(lista.some(p => p.nome.toLowerCase() === nome.toLowerCase())) return null;
+  const {data, error} = await sb.from('produtos').insert({modulo_id:moduloId, nome}).select().single();
+  if(error) return null;
+  lista.push(data); return data;
+}
+function fillProdModuloSelect(){
+  const sel = $('p-modulo'), atual = sel.value;
+  sel.innerHTML = db.modulos.map(m => `<option value="${esc(m.id)}">${esc(m.nome)}</option>`).join('');
+  if(atual && findModulo(atual)) sel.value = atual;
+}
+async function addProduto(){
+  const id = $('p-modulo').value, nome = $('p-nome').value.trim();
+  if(!id) return;
+  if(!nome){ setMsg('p-msg','Informe o nome do produto.','warn'); return; }
+  if((db.produtos[id] || []).some(p => p.nome.toLowerCase() === nome.toLowerCase())){ setMsg('p-msg','Esse produto já existe neste módulo.','warn'); return; }
+  if(!(await registrarProduto(id, nome))){ setMsg('p-msg','Não foi possível salvar o produto.','warn'); return; }
+  $('p-nome').value = ''; setMsg('p-msg','Produto adicionado.','ok');
+  renderProdutos(); fillProdutosDatalist(activeModuloId);
+}
+async function removeProduto(id, moduloId){
+  const {error} = await sb.from('produtos').delete().eq('id', id);
+  if(error){ setMsg('p-msg','Erro: ' + error.message,'warn'); return; }
+  db.produtos[moduloId] = (db.produtos[moduloId] || []).filter(p => p.id !== id);
+  renderProdutos(); fillProdutosDatalist(activeModuloId);
+}
+function renderProdutos(){
+  const wrap = $('p-table-wrap'), id = $('p-modulo').value, lista = db.produtos[id] || [];
+  if(!lista.length){ wrap.innerHTML = '<div class="empty">Nenhum produto cadastrado neste módulo.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Produto</th><th></th></tr></thead><tbody>${lista.map(p => `<tr><td style="${FONTE}">${esc(p.nome)}</td>
+  <td><button class="danger" onclick="removeProduto(${p.id},'${esc(id)}')">remover</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------- lançamentos ---------- */
+async function addLancamento(){
+  const m = findModulo(activeModuloId); if(!m) return;
+  const data = $('f-data').value;
+  const entrada = $('f-departamento-input').value.trim().toLowerCase();
+  const campus = m.campusFixo || $('f-campus').value;
+  const dep = db.departamentos.find(d => d.campus === campus &&
+    (`${d.codigo} - ${d.nome}`.toLowerCase() === entrada || d.codigo.toLowerCase() === entrada || d.nome.toLowerCase() === entrada));
+  if(!dep){ setMsg('l-msg','Selecione ou digite um departamento válido cadastrado para este campus.','warn'); return; }
+  const produto = $('f-produto').value.trim(), servico = $('f-servico').value.trim();
+  const unidade = m.unidade ? $('f-unidade').value : null;
+  const valor = parseFloat($('f-valor').value);
+  if(!data || (!produto && !servico) || isNaN(valor)){ setMsg('l-msg','Preencha data, departamento, produto ou histórico, e valor.','warn'); return; }
+  const {data:row, error} = await sb.from('lancamentos').insert({modulo_id:m.id, data, codigo:dep.codigo, departamento:dep.nome,
+    produto:produto || null, servico:servico || null, unidade, campus, valor}).select().single();
+  if(error){ setMsg('l-msg','Erro ao salvar: ' + error.message,'warn'); return; }
+  db.lancamentos.push(mapLanc(row));
+  if(produto) await registrarProduto(m.id, produto);
+  ['f-produto','f-servico','f-valor','f-departamento-input'].forEach(id => $(id).value = '');
+  setMsg('l-msg','Lançamento incluído com sucesso!','ok');
+  renderLancamentos(); renderRelatorioPreview(); renderProdutos(); fillProdutosDatalist(m.id);
+}
+async function removeLancamento(id){
+  const {data, error} = await sb.from('lancamentos').delete().eq('id', id).select();
+  if(error || !data.length){ setMsg('l-msg', error ? 'Erro: ' + error.message : 'Você não tem permissão para remover este lançamento.','warn'); return; }
+  db.lancamentos = db.lancamentos.filter(l => l.id !== id);
+  renderLancamentos(); renderRelatorioPreview();
+}
+function renderLancamentos(){
+  const m = findModulo(activeModuloId), wrap = $('l-table-wrap');
+  if(!m){ wrap.innerHTML = ''; return; }
+  const rows = db.lancamentos.filter(l => String(l.moduloId) === String(m.id));
+  if(!rows.length){ wrap.innerHTML = '<div class="empty">Nenhum lançamento registrado neste módulo.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Data</th><th>Código</th><th>Departamento</th><th>Produto</th><th>Histórico</th>${m.unidade ? '<th>Unid.</th>' : ''}${!m.campusFixo ? '<th>Campus</th>' : ''}<th>Valor</th><th></th></tr></thead><tbody>
+  ${rows.slice().reverse().map(l => `<tr><td>${esc(l.data)}</td><td>${esc(l.codigo) || '—'}</td><td style="${FONTE}">${esc(l.departamento)}</td>
+  <td style="${FONTE}">${esc(l.produto) || '—'}</td><td style="${FONTE}">${esc(l.servico) || '—'}</td>
+  ${m.unidade ? `<td>${esc(l.unidade)}</td>` : ''}${!m.campusFixo ? `<td><span class="pill">${esc(l.campus)}</span></td>` : ''}
+  <td>${brl(l.valor)}</td><td>${(isAdm() || l.criadoPor === me.id) ? `<button class="danger" onclick="removeLancamento(${l.id})">remover</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+}
+function exportModulo(){
+  const m = findModulo(activeModuloId); if(!m) return;
+  const rows = db.lancamentos.filter(l => String(l.moduloId) === String(m.id));
+  if(!rows.length){ setMsg('l-msg','Nada para exportar neste módulo.','warn'); return; }
+  const data = rows.map(l => {
+    const o = {Data:l.data, Código:l.codigo, Departamento:l.departamento, Produto:l.produto || '', 'Histórico':l.servico || ''};
+    if(m.unidade) o.Unidade = l.unidade;
+    if(!m.campusFixo) o.Campus = l.campus;
+    o.Valor = l.valor; return o;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), m.nome.slice(0,31));
+  XLSX.writeFile(wb, `${m.id}_${todayStr()}.xlsx`);
+}
+
+/* ---------- relatórios ---------- */
+function fillModuloReportSelect(){
+  $('r-modulo').innerHTML = '<option value="">Todos os módulos</option>' + db.modulos.map(m => `<option value="${esc(m.nome)}">${esc(m.nome)}</option>`).join('');
+}
+function filteredLancamentos(){
+  const modulo = $('r-modulo').value, de = $('r-de').value, ate = $('r-ate').value;
+  return db.lancamentos.filter(l => (!modulo || l.modulo === modulo) && (!de || l.data >= de) && (!ate || l.data <= ate));
+}
+function renderRelatorioPreview(){
+  const wrap = $('r-table-wrap'), rows = filteredLancamentos();
+  if(!rows.length){ wrap.innerHTML = '<div class="empty">Nenhum lançamento no filtro atual.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>Data</th><th>Módulo</th><th>Código</th><th>Departamento</th><th>Produto</th><th>Histórico</th><th>Campus</th><th>Valor</th></tr></thead><tbody>
+  ${rows.map(l => `<tr><td>${esc(l.data)}</td><td>${esc(l.modulo)}</td><td>${esc(l.codigo) || '—'}</td><td>${esc(l.departamento)}</td>
+  <td style="${FONTE}">${esc(l.produto) || '—'}</td><td style="${FONTE}">${esc(l.servico) || '—'}</td><td>${esc(l.campus) || '—'}</td><td>${brl(l.valor)}</td></tr>`).join('')}</tbody></table>`;
+}
+function exportDetalhado(){
+  const rows = filteredLancamentos();
+  if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
+  const data = rows.map(l => ({Data:l.data, Valor:l.valor, Departamento:l.departamento, Produto:l.produto || '', 'Histórico':l.servico || '', Módulo:l.modulo, Código:l.codigo, Campus:l.campus || ''}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Detalhado');
+  XLSX.writeFile(wb, `relatorio_detalhado_${todayStr()}.xlsx`);
+  setMsg('r-msg','Excel detalhado exportado com sucesso!','ok');
+}
+function exportContabil(){
+  const rows = filteredLancamentos();
+  if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
+  const chave = l => l.produto || l.servico || '(sem descrição)';
+  const itens = [...new Set(rows.map(chave))].sort();
+  const deptos = [...new Set(rows.map(l => l.departamento))].sort();
+  const table = itens.map(item => {
+    const linha = {'Produto': item}; let total = 0;
+    deptos.forEach(dep => {
+      const soma = rows.filter(l => chave(l) === item && l.departamento === dep).reduce((s,l) => s + l.valor, 0);
+      linha[dep] = soma || 0; total += soma;
+    });
+    linha.Total = total; return linha;
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(table), 'Contábil');
+  XLSX.writeFile(wb, `relatorio_contabil_${todayStr()}.xlsx`);
+  setMsg('r-msg','Excel contábil exportado com sucesso!','ok');
+}
+function exportPDF(){
+  const rows = filteredLancamentos();
+  if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
+  const doc = new window.jspdf.jsPDF({orientation:'landscape'});
+  doc.setFontSize(14); doc.text('Relatório de lançamentos', 14, 16);
+  doc.setFontSize(10); doc.text(`Módulo: ${$('r-modulo').value || 'Todos os módulos'}  •  Emitido em ${todayStr()}`, 14, 23);
+  doc.autoTable({startY:28,
+    head:[['Data','Módulo','Código','Departamento','Produto','Histórico','Campus','Valor']],
+    body:rows.map(l => [l.data, l.modulo, l.codigo || '—', l.departamento, l.produto || '—', l.servico || '—', l.campus || '—', brl(l.valor)]),
+    styles:{fontSize:8}, headStyles:{fillColor:[28,28,22]}});
+  doc.save(`relatorio_${todayStr()}.pdf`);
+  setMsg('r-msg','PDF exportado com sucesso!','ok');
+}
+
+/* ---------- navegação (mantida) ---------- */
+function showView(id){
+  document.querySelectorAll('section.view').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('#sidebar button').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  
+  const btn = document.querySelector(`#sidebar button[data-view="${id}"]`);
+  if(btn) btn.classList.add('active');
+
+  if(id !== 'v-relatorios'){
+    document.getElementById('sidebar-relatorios').classList.add('hidden');
+    document.getElementById('btn-toggle-relatorios').classList.remove('open');
+  }
+  if(id !== 'v-departamentos'){
+    document.getElementById('sidebar-depts').classList.add('hidden');
+    document.getElementById('btn-toggle-depts').classList.remove('open');
+  }
+  if(id === 'v-cadastrar-modulo'){
+    renderModulosList();
+  }
+  if(id === 'v-usuarios') renderUsuarios();
+}
+
+function toggleDeptsMenu(){
+  const menu = document.getElementById('sidebar-depts');
+  const btn = document.getElementById('btn-toggle-depts');
+  const isHidden = menu.classList.contains('hidden');
+  
+  showView('v-departamentos');
+  if(isHidden){
+    menu.classList.remove('hidden');
+    btn.classList.add('open');
+    btn.classList.add('active');
+  } else {
+    menu.classList.add('hidden');
+    btn.classList.remove('open');
+  }
+}
+
+function selectDeptCampusFilter(campus){
+  activeDeptCampusFilter = campus;
+  showView('v-departamentos');
+  
+  document.getElementById('btn-toggle-depts').classList.add('active');
+  document.getElementById('sidebar-depts').classList.remove('hidden');
+  document.getElementById('btn-toggle-depts').classList.add('open');
+
+  document.querySelectorAll('#sidebar-depts button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.deptCampus === campus);
+  });
+
+  document.querySelectorAll('.filters button[id^="f-tab-"]').forEach(b=>{
+    b.classList.toggle('active', b.id === `f-tab-${campus}`);
+  });
+
+  const titleElem = document.getElementById('d-view-title');
+  if(campus === 'TODOS') titleElem.textContent = 'Lista de departamentos — Todos';
+  else titleElem.textContent = `Lista de departamentos — Campus ${campus}`;
+
+  renderDepts();
+}
+
+function toggleRelatoriosMenu(){
+  const menu = document.getElementById('sidebar-relatorios');
+  const btn = document.getElementById('btn-toggle-relatorios');
+  const isHidden = menu.classList.contains('hidden');
+  
+  if(isHidden){
+    menu.classList.remove('hidden');
+    btn.classList.add('open');
+    selectRelatorio(activeRelatorioTipo);
+  } else {
+    menu.classList.add('hidden');
+    btn.classList.remove('open');
+  }
+}
+
+function selectRelatorio(tipo){
+  activeRelatorioTipo = tipo;
+  showView('v-relatorios');
+  
+  document.getElementById('btn-toggle-relatorios').classList.add('active');
+  document.getElementById('sidebar-relatorios').classList.remove('hidden');
+  document.getElementById('btn-toggle-relatorios').classList.add('open');
+  
+  document.querySelectorAll('#sidebar-relatorios button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.rel === tipo);
+  });
+
+  const titleElem = document.getElementById('r-view-title');
+  const descElem = document.getElementById('r-view-desc');
+  const btnExport = document.getElementById('btn-export-relatorio');
+
+  if(tipo === 'contabil'){
+    titleElem.textContent = 'Relatório Excel — Contábil';
+    descElem.textContent = 'Gera uma planilha com Produtos nas linhas (ou o histórico, quando não houver produto) e Departamentos nas colunas, com os totais.';
+    btnExport.textContent = 'Exportar Excel Contábil';
+  } else if(tipo === 'detalhado'){
+    titleElem.textContent = 'Relatório Excel — Detalhado';
+    descElem.textContent = 'Gera uma planilha detalhada campo a campo com um lançamento por linha.';
+    btnExport.textContent = 'Exportar Excel Detalhado';
+  } else if(tipo === 'pdf'){
+    titleElem.textContent = 'Relatório em PDF';
+    descElem.textContent = 'Exporta um documento em PDF pronto para impressão ou envio com a lista de lançamentos.';
+    btnExport.textContent = 'Exportar PDF';
+  }
+
+  document.getElementById('r-msg').textContent = '';
+  renderRelatorioPreview();
+}
+
+function executarExportacao(){
+  if(activeRelatorioTipo === 'contabil') exportContabil();
+  else if(activeRelatorioTipo === 'detalhado') exportDetalhado();
+  else if(activeRelatorioTipo === 'pdf') exportPDF();
+}
+
+function selectModuloAndShow(id){
+  showView('v-lancamentos');
+  selectModulo(id);
+}
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+/* ---------- init ---------- */
+function renderAll(){
+  renderDepts(); renderModSubnav(); fillModuloReportSelect(); renderRelatorioPreview();
+  renderModulosList(); fillProdModuloSelect(); renderProdutos(); renderUsuarios();
+}
+if(!CONFIGURADO){ $('cfg-warn').style.display = 'block'; }
+else{
+  sb.auth.onAuthStateChange(ev => { if(ev === 'SIGNED_OUT') mostrarLogin(); });
+  boot();
+}
+
+</script>
+</body>
+</html>
