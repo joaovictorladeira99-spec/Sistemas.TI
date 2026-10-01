@@ -140,6 +140,17 @@
     body.nav-open nav#sidebar{transform:none;} body.nav-open #backdrop{display:block;position:fixed;inset:60px 0 0 0;background:rgba(0,0,0,.5);z-index:25;}
     main{padding:20px 16px;} .grid2{grid-template-columns:1fr;} .bar-row{grid-template-columns:100px 1fr 90px;} header .who .badge,#who-name{display:none;}
   }
+
+  /* CONFIG CONTÁBIL / BACKUP */
+  .cfg-table input,.cfg-table td select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:7px 9px;font-size:13px;font-family:inherit;border-radius:8px;outline:none;width:100%;min-width:92px;}
+  .cfg-table input:focus,.cfg-table td select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(139,123,255,.2);}
+  .cfg-table td:first-child{white-space:nowrap;font-weight:600;}
+  .opt-line{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px;}
+  .opt-line label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer;color:var(--ink);}
+  .hint{color:var(--ink-dim);font-size:12.5px;margin:0 0 12px;line-height:1.5;}
+  code.sql{display:block;background:var(--panel-2);border:1px solid var(--line);padding:10px 12px;border-radius:10px;font-size:12px;margin-top:8px;user-select:all;overflow-x:auto;white-space:pre;}
+  .backup-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;}
+  #bk-stats{margin-bottom:18px;}
 </style>
 </head>
 <body>
@@ -197,6 +208,10 @@
 
     <button class="nav-btn adm-only" data-view="v-cadastrar-modulo" onclick="showView('v-cadastrar-modulo')">
       <span>⚙️ Gerenciar Módulos</span>
+    </button>
+
+    <button class="nav-btn adm-only" data-view="v-backup" onclick="showView('v-backup')">
+      <span>💾 Backup</span>
     </button>
 
     <!-- RELATÓRIOS -->
@@ -354,6 +369,47 @@
       </div>
     </section>
 
+    <!-- BACKUP -->
+    <section class="view adm-only" id="v-backup">
+      <h2>Backup</h2>
+      <p class="lead">Salve uma cópia dos dados do sistema e restaure quando precisar.</p>
+
+      <div class="card">
+        <h3>Cópia de segurança</h3>
+        <div class="stats" id="bk-stats"></div>
+        <p class="hint">O arquivo <b>.json</b> guarda tudo (módulos, departamentos, produtos, lançamentos, usuários e a configuração do Excel contábil) e pode ser restaurado aqui. A planilha <b>.xlsx</b> é só para consulta.</p>
+        <div class="backup-actions">
+          <button class="primary" onclick="backupJSON()">⬇ Baixar backup completo (.json)</button>
+          <button class="ghost" onclick="backupExcel()">Baixar planilha (.xlsx)</button>
+        </div>
+        <p class="hint" id="bk-last" style="margin-top:14px;"></p>
+        <div class="msg" id="bk-msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Restaurar backup</h3>
+        <p class="hint">Escolha um arquivo <b>.json</b> gerado por este sistema. A restauração <b>adiciona e atualiza</b> módulos, departamentos, produtos, lançamentos e a configuração do Excel contábil; não apaga nada que já existe. Contas de usuário continuam sendo gerenciadas pelo Supabase e não são recriadas.</p>
+        <input type="file" id="bk-file" accept=".json,application/json" onchange="restaurarBackup(event)">
+        <div class="msg" id="bk-rest-msg"></div>
+      </div>
+
+      <div class="card" style="border-color:color-mix(in srgb,var(--warn) 50%,var(--line));">
+        <h3 style="color:var(--warn);">Limpar dados</h3>
+        <p class="hint">Apaga definitivamente os dados escolhidos, para todos os usuários. Módulos e contas de usuário <b>não</b> são apagados. A limpeza só libera depois que você baixar um backup completo nesta sessão.</p>
+        <div class="field checks">
+          <label><input type="checkbox" class="lp-check" value="lancamentos" onchange="atualizarLimpeza()"> Lançamentos</label>
+          <label><input type="checkbox" class="lp-check" value="departamentos" onchange="atualizarLimpeza()"> Departamentos</label>
+          <label><input type="checkbox" class="lp-check" value="produtos" onchange="atualizarLimpeza()"> Produtos</label>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <div class="field" style="max-width:260px;"><label>Digite APAGAR para confirmar</label><input id="lp-confirma" autocomplete="off" placeholder="APAGAR" oninput="atualizarLimpeza()"></div>
+          <button class="danger" id="lp-btn" style="padding:10px 18px;font-size:13px;" onclick="limparDados()" disabled>Limpar dados selecionados</button>
+        </div>
+        <div class="msg" id="lp-status"></div>
+        <div class="msg" id="lp-msg"></div>
+      </div>
+    </section>
+
     <!-- RELATÓRIOS -->
     <section class="view" id="v-relatorios">
       <h2 id="r-view-title">Relatórios</h2>
@@ -367,10 +423,27 @@
           <div class="field"><label>Até</label><input type="date" id="r-ate" onchange="renderRelatorioPreview()"></div>
         </div>
 
+        <div class="opt-line" id="opts-contabil" style="display:none;">
+          <label><input type="checkbox" id="opt-cabecalho" onchange="salvarOptsContabil()"> Incluir linha de cabeçalho no Excel</label>
+          <label><input type="checkbox" id="opt-totalizar" onchange="salvarOptsContabil()"> Somar lançamentos do mesmo departamento + histórico</label>
+        </div>
+
         <div style="margin-top:18px;">
           <button class="primary" id="btn-export-relatorio" onclick="executarExportacao()">Exportar Relatório</button>
         </div>
         <div class="msg" id="r-msg"></div>
+      </div>
+
+      <div class="card adm-only" id="card-cfg-contabil" style="display:none;">
+        <h3>Configuração do Excel Contábil por módulo</h3>
+        <p class="hint">Colunas do arquivo, nesta ordem: <b>Conta; Subconta; 10; Código do departamento; Restrição; Valor; N; Histórico</b>. O código do departamento e o valor vêm do lançamento; o resto você define para cada módulo. Ao exportar vários módulos de uma vez, cada linha usa a configuração do seu módulo.</p>
+        <div id="cfg-table-wrap"></div>
+        <div style="margin-top:16px;"><button class="primary" onclick="salvarCfgContabil()">Salvar configuração</button></div>
+        <div class="msg" id="cfg-msg"></div>
+        <div id="cfg-sql-hint" style="display:none;">
+          <p class="hint" style="margin-top:10px;">A configuração ficou salva só neste navegador. Para valer para todos os usuários, rode este comando uma vez no Supabase (SQL Editor) e salve de novo:</p>
+          <code class="sql">alter table public.modulos add column if not exists cfg_contabil jsonb;</code>
+        </div>
       </div>
 
       <div class="card">
@@ -392,7 +465,16 @@
 const SUPABASE_URL = 'https://hoyvdalcerqiosxdufet.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_xfjwjgxrm9yTmRgTDxPI7A_lRL8xNbN';
 const CONFIGURADO = !SUPABASE_URL.startsWith('COLE_');
-const sb = CONFIGURADO ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const sb = CONFIGURADO ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storage: window.sessionStorage,   // sessão vale só enquanto a aba estiver aberta
+    persistSession: true,             // mantém ao atualizar a página
+    autoRefreshToken: true            // renova o token enquanto a aba estiver aberta
+  }
+}) : null;
+
+// limpa a sessão antiga que ficou salva no localStorage (evita login automático)
+try{ Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k)); }catch(e){}
 
 /* ---------- estado ---------- */
 let db = {departamentos:[], modulos:[], produtos:{}, lancamentos:[], profiles:[], userModulos:{}};
@@ -441,7 +523,7 @@ async function loadAll(){
     fetchAll('lancamentos','id'), fetchAll('user_modulos','user_id')
   ]);
   db.departamentos = deps;
-  db.modulos = mods.map(m => ({id:m.id, nome:m.nome, unidade:m.unidade, campusFixo:m.campus_fixo}));
+  db.modulos = mods.map(m => ({id:m.id, nome:m.nome, unidade:m.unidade, campusFixo:m.campus_fixo, cfg:m.cfg_contabil || null}));
   db.produtos = {};
   prods.forEach(p => (db.produtos[p.modulo_id] = db.produtos[p.modulo_id] || []).push(p));
   db.lancamentos = lancs.map(mapLanc);
@@ -503,10 +585,11 @@ async function boot(){
   $('avatar').textContent = (me.nome.trim()[0] || '?').toUpperCase();
   renderAll();
   showView('v-dashboard');
+  lembrarBackup();
 }
 async function doLogout(){
   await sb.auth.signOut();
-  me = null; document.body.classList.remove('is-adm');
+  me = null; backupDestaSessao = false; document.body.classList.remove('is-adm');
   mostrarLogin(); setMsg('login-msg','');
 }
 
@@ -801,50 +884,310 @@ function renderRelatorioPreview(){
   ${rows.map(l => `<tr><td>${esc(l.data)}</td><td>${esc(l.modulo)}</td><td>${esc(l.codigo) || '—'}</td><td>${esc(l.departamento)}</td>
   <td style="${FONTE}">${esc(l.produto) || '—'}</td><td style="${FONTE}">${esc(l.servico) || '—'}</td><td>${esc(l.campus) || '—'}</td><td>${brl(l.valor)}</td></tr>`).join('')}</tbody></table>`;
 }
+/* ---- helpers de exportação ---- */
+function fmtData(d){ const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (d || ''); }
+function autoNum(v){ v = String(v ?? '').trim(); return /^[1-9]\d*$/.test(v) ? Number(v) : v; }
+function baixarArquivo(blob, nome){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nome;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function ajustarPlanilha(ws, larguras, colValor){
+  ws['!cols'] = larguras.map(w => ({wch:w}));
+  const ref = XLSX.utils.decode_range(ws['!ref']);
+  if(colValor != null) for(let r = ref.s.r; r <= ref.e.r; r++){
+    const c = ws[XLSX.utils.encode_cell({r, c:colValor})];
+    if(c && c.t === 'n') c.z = '#,##0.00';
+  }
+}
+
+/* ---- Excel detalhado: um lançamento por linha ---- */
 function exportDetalhado(){
   const rows = filteredLancamentos();
   if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
-  const data = rows.map(l => ({Data:l.data, Valor:l.valor, Departamento:l.departamento, Produto:l.produto || '', 'Histórico':l.servico || '', Módulo:l.modulo, Código:l.codigo, Campus:l.campus || ''}));
+  const temUn = rows.some(l => l.unidade);
+  const cab = ['Data','Valor','Departamento','Produto','Histórico','Módulo','Código','Campus'].concat(temUn ? ['Unidade'] : []);
+  const aoa = [cab].concat(rows.map(l => [fmtData(l.data), Number(l.valor), l.departamento, l.produto || '', l.servico || '', l.modulo, l.codigo, l.campus || ''].concat(temUn ? [l.unidade || ''] : [])));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ajustarPlanilha(ws, [12,14,30,26,38,26,10,8].concat(temUn ? [9] : []), 1);
+  ws['!autofilter'] = {ref: XLSX.utils.encode_range({s:{r:0,c:0}, e:{r:aoa.length - 1, c:cab.length - 1}})};
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Detalhado');
+  XLSX.utils.book_append_sheet(wb, ws, 'Detalhado');
   XLSX.writeFile(wb, `relatorio_detalhado_${todayStr()}.xlsx`);
   setMsg('r-msg','Excel detalhado exportado com sucesso!','ok');
+}
+
+/* ---- Excel contábil: configurável por módulo ---- */
+const CFG_PADRAO = {conta:'', subconta:'', fixo:'10', restricao:'', n:'N', historico:'servico', prefixo:''};
+function cfgLocal(){ try{ return JSON.parse(localStorage.getItem('sg_cfg_contabil') || '{}'); }catch(e){ return {}; } }
+function cfgDoModulo(id){
+  const m = findModulo(id);
+  return Object.assign({}, CFG_PADRAO, (m && m.cfg) || cfgLocal()[id] || {});
+}
+function optsContabil(){
+  const pad = {cabecalho:false, totalizar:true};
+  try{ return Object.assign(pad, JSON.parse(localStorage.getItem('sg_opts_contabil') || '{}')); }catch(e){ return pad; }
+}
+function salvarOptsContabil(){
+  try{ localStorage.setItem('sg_opts_contabil', JSON.stringify({cabecalho:$('opt-cabecalho').checked, totalizar:$('opt-totalizar').checked})); }catch(e){}
+}
+function renderCfgContabil(){
+  const wrap = $('cfg-table-wrap'); if(!wrap) return;
+  if(!db.modulos.length){ wrap.innerHTML = '<div class="empty">Nenhum módulo cadastrado.</div>'; return; }
+  const op = (v, t, atual) => `<option value="${v}" ${atual === v ? 'selected' : ''}>${t}</option>`;
+  wrap.innerHTML = `<table class="cfg-table"><thead><tr><th>Módulo</th><th>Conta</th><th>Subconta</th><th>Coluna "10"</th><th>Restrição</th><th>Coluna "N"</th><th>Histórico sai de</th><th>Texto antes do histórico</th></tr></thead><tbody>
+  ${db.modulos.map(m => { const c = cfgDoModulo(m.id); return `<tr data-mod="${esc(m.id)}"><td>${esc(m.nome)}</td>
+    <td><input data-k="conta" value="${esc(c.conta)}" placeholder="ex: 3101"></td>
+    <td><input data-k="subconta" value="${esc(c.subconta)}"></td>
+    <td><input data-k="fixo" value="${esc(c.fixo)}"></td>
+    <td><input data-k="restricao" value="${esc(c.restricao)}"></td>
+    <td><input data-k="n" value="${esc(c.n)}"></td>
+    <td><select data-k="historico">${op('servico','Histórico do lançamento',c.historico)}${op('produto','Produto',c.historico)}${op('ambos','Produto + histórico',c.historico)}</select></td>
+    <td><input data-k="prefixo" value="${esc(c.prefixo)}" placeholder="opcional"></td></tr>`; }).join('')}</tbody></table>`;
+}
+async function salvarCfgContabil(){
+  if(!isAdm()) return;
+  const cfgs = {};
+  document.querySelectorAll('#cfg-table-wrap tr[data-mod]').forEach(tr => {
+    const o = {}; tr.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.value.trim());
+    cfgs[tr.dataset.mod] = o;
+  });
+  let servidorOk = true;
+  for(const m of db.modulos){
+    const c = cfgs[m.id]; if(!c) continue;
+    const {data, error} = await sb.from('modulos').update({cfg_contabil:c}).eq('id', m.id).select();
+    if(error || !data || !data.length){ servidorOk = false; break; }
+    m.cfg = c;
+  }
+  try{ localStorage.setItem('sg_cfg_contabil', JSON.stringify(cfgs)); }catch(e){}
+  if(!servidorOk) db.modulos.forEach(m => m.cfg = null);
+  $('cfg-sql-hint').style.display = servidorOk ? 'none' : 'block';
+  setMsg('cfg-msg', servidorOk ? 'Configuração salva para todos os usuários.' : 'Configuração salva apenas neste navegador.', servidorOk ? 'ok' : 'warn');
+}
+function histContabil(l, c){
+  const prod = (l.produto || '').trim(), serv = (l.servico || '').trim();
+  const t = c.historico === 'produto' ? (prod || serv) : c.historico === 'ambos' ? [prod, serv].filter(Boolean).join(' - ') : (serv || prod);
+  return ((c.prefixo || '') + t).trim() || '(sem histórico)';
 }
 function exportContabil(){
   const rows = filteredLancamentos();
   if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
-  const chave = l => l.produto || l.servico || '(sem descrição)';
-  const itens = [...new Set(rows.map(chave))].sort();
-  const deptos = [...new Set(rows.map(l => l.departamento))].sort();
-  const table = itens.map(item => {
-    const linha = {'Produto': item}; let total = 0;
-    deptos.forEach(dep => {
-      const soma = rows.filter(l => chave(l) === item && l.departamento === dep).reduce((s,l) => s + l.valor, 0);
-      linha[dep] = soma || 0; total += soma;
-    });
-    linha.Total = total; return linha;
+  const opts = optsContabil(), linhas = [], idx = new Map();
+  rows.forEach(l => {
+    const c = cfgDoModulo(l.moduloId), hist = histContabil(l, c);
+    const valor = Math.round(Number(l.valor) * 100) / 100;
+    const chave = [l.moduloId, l.codigo, hist].join('||');
+    if(opts.totalizar && idx.has(chave)){ const r = idx.get(chave); r.valor = Math.round((r.valor + valor) * 100) / 100; return; }
+    const r = {modulo:l.modulo, codigo:l.codigo, c, hist, valor};
+    linhas.push(r); if(opts.totalizar) idx.set(chave, r);
   });
+  linhas.sort((x, y) => String(x.modulo).localeCompare(String(y.modulo)) || String(x.codigo).localeCompare(String(y.codigo), 'pt-BR', {numeric:true}) || x.hist.localeCompare(y.hist));
+  const aoa = linhas.map(r => [autoNum(r.c.conta), autoNum(r.c.subconta), autoNum(r.c.fixo), String(r.codigo ?? ''), autoNum(r.c.restricao), r.valor, r.c.n, r.hist]);
+  if(opts.cabecalho) aoa.unshift(['Conta','Subconta','10','Código do departamento','Restrição','Valor','N','Histórico']);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ajustarPlanilha(ws, [10,10,6,22,10,14,5,50], 5);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(table), 'Contábil');
+  XLSX.utils.book_append_sheet(wb, ws, 'Contábil');
   XLSX.writeFile(wb, `relatorio_contabil_${todayStr()}.xlsx`);
-  setMsg('r-msg','Excel contábil exportado com sucesso!','ok');
+  setMsg('r-msg',`Excel contábil exportado (${linhas.length} linha${linhas.length === 1 ? '' : 's'}).`,'ok');
 }
+
+/* ---- PDF: cabeçalho azul e bordas arredondadas ---- */
 function exportPDF(){
   const rows = filteredLancamentos();
   if(!rows.length){ setMsg('r-msg','Nada para exportar com este filtro.','warn'); return; }
-  const doc = new window.jspdf.jsPDF({orientation:'landscape'});
-  doc.setFontSize(14); doc.text('Relatório de lançamentos', 14, 16);
-  doc.setFontSize(10); doc.text(`Módulo: ${$('r-modulo').value || 'Todos os módulos'}  •  Emitido em ${todayStr()}`, 14, 23);
-  doc.autoTable({startY:28,
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const M = 14, AZUL = [29,78,216], AZUL_ESC = [30,58,138], TOPO = 38, TOPO_SEG = 14;
+  const total = rows.reduce((s, l) => s + Number(l.valor), 0);
+  const de = $('r-de').value, ate = $('r-ate').value;
+  const periodo = (de || ate) ? `${de ? fmtData(de) : 'início'} a ${ate ? fmtData(ate) : 'hoje'}` : 'todo o período';
+
+  // faixa de título azul, arredondada
+  doc.setFillColor(...AZUL); doc.roundedRect(M, 10, W - 2 * M, 22, 4, 4, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.text('Relatório de lançamentos', M + 8, 20);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(`Módulo: ${$('r-modulo').value || 'Todos os módulos'}   •   Período: ${periodo}   •   Emitido em ${fmtData(todayStr())}`, M + 8, 27);
+  doc.setFontSize(8); doc.text(`Total • ${rows.length} lançamento(s)`, W - M - 8, 16.5, {align:'right'});
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.text(brl(total), W - M - 8, 25, {align:'right'});
+
+  const pag = () => doc.internal.getCurrentPageInfo().pageNumber;
+  doc.autoTable({
+    startY: TOPO, margin:{top:TOPO_SEG, left:M, right:M, bottom:18}, tableWidth: W - 2 * M, theme:'plain',
     head:[['Data','Módulo','Código','Departamento','Produto','Histórico','Campus','Valor']],
-    body:rows.map(l => [l.data, l.modulo, l.codigo || '—', l.departamento, l.produto || '—', l.servico || '—', l.campus || '—', brl(l.valor)]),
-    styles:{fontSize:8}, headStyles:{fillColor:[28,28,22]}});
+    body: rows.map(l => [fmtData(l.data), l.modulo, l.codigo || '—', l.departamento, l.produto || '—', l.servico || '—', l.campus || '—', brl(l.valor)]),
+    foot:[[{content:`Total • ${rows.length} lançamento(s)`, colSpan:7, styles:{halign:'right'}}, brl(total)]],
+    showHead:'everyPage', showFoot:'lastPage',
+    styles:{fontSize:8, cellPadding:{top:2.4, bottom:2.4, left:3, right:3}, textColor:[30,41,59], valign:'middle', overflow:'linebreak'},
+    headStyles:{fillColor:false, textColor:[255,255,255], fontStyle:'bold', fontSize:8.5, minCellHeight:9},
+    footStyles:{fillColor:false, textColor:AZUL_ESC, fontStyle:'bold', fontSize:9, minCellHeight:10},
+    columnStyles:{0:{cellWidth:21}, 2:{cellWidth:19}, 6:{cellWidth:21, halign:'center'}, 7:{cellWidth:29, halign:'right', fontStyle:'bold'}},
+    didParseCell: d => { if(d.section === 'head' && d.column.index === 7) d.cell.styles.halign = 'right'; if(d.section === 'head' && d.column.index === 6) d.cell.styles.halign = 'center'; },
+    willDrawPage: () => {   // fundo azul do cabeçalho da tabela (cantos de cima arredondados)
+      const y = pag() === 1 ? TOPO : TOPO_SEG;
+      doc.setFillColor(...AZUL);
+      doc.roundedRect(M, y, W - 2 * M, 9, 3, 3, 'F');
+      doc.rect(M, y + 4.5, W - 2 * M, 4.5, 'F');
+    },
+    didDrawCell: d => {
+      if(d.section === 'body'){
+        doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.15);
+        doc.line(d.cell.x, d.cell.y + d.cell.height, d.cell.x + d.cell.width, d.cell.y + d.cell.height);
+      } else if(d.section === 'foot'){
+        doc.setDrawColor(...AZUL); doc.setLineWidth(0.4);
+        doc.line(d.cell.x, d.cell.y, d.cell.x + d.cell.width, d.cell.y);
+      }
+    },
+    didDrawPage: d => {     // borda arredondada em volta da tabela
+      const y0 = pag() === 1 ? TOPO : TOPO_SEG;
+      doc.setDrawColor(...AZUL); doc.setLineWidth(0.5);
+      doc.roundedRect(M, y0, W - 2 * M, d.cursor.y - y0, 3, 3, 'S');
+    }
+  });
+  const n = doc.internal.getNumberOfPages();
+  for(let i = 1; i <= n; i++){
+    doc.setPage(i); doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    doc.text('Sistema de Gestão', M, H - 8);
+    doc.text(`Página ${i} de ${n}`, W - M, H - 8, {align:'right'});
+  }
   doc.save(`relatorio_${todayStr()}.pdf`);
   setMsg('r-msg','PDF exportado com sucesso!','ok');
 }
 
+/* ---------- backup ---------- */
+const BACKUP_DIAS_AVISO = 7;
+let backupDestaSessao = false;   // só libera a limpeza depois de baixar um .json completo
+function montarBackup(){
+  return {
+    sistema:'Sistema de Gestão', versao:1, geradoEm:new Date().toISOString(), geradoPor: me ? me.nome : '',
+    modulos: db.modulos.map(m => ({id:m.id, nome:m.nome, unidade:m.unidade, campus_fixo:m.campusFixo, cfg_contabil:m.cfg || null})),
+    departamentos: db.departamentos,
+    produtos: Object.values(db.produtos).flat(),
+    lancamentos: db.lancamentos.map(l => ({id:l.id, modulo_id:l.moduloId, data:l.data, codigo:l.codigo, departamento:l.departamento, produto:l.produto || null, servico:l.servico || null, unidade:l.unidade || null, campus:l.campus || null, valor:l.valor, criado_por:l.criadoPor || null})),
+    usuarios: db.profiles,
+    user_modulos: Object.entries(db.userModulos).flatMap(([user_id, ids]) => ids.map(modulo_id => ({user_id, modulo_id}))),
+    config_contabil_local: cfgLocal()
+  };
+}
+function marcarBackupFeito(){
+  try{ localStorage.setItem('sg_last_backup', new Date().toISOString()); }catch(e){}
+  renderBackupInfo();
+}
+function stampArquivo(){ const d = new Date(), p = n => String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; }
+function backupJSON(){
+  if(!isAdm()) return;
+  baixarArquivo(new Blob([JSON.stringify(montarBackup(), null, 2)], {type:'application/json'}), `backup_sistema_${stampArquivo()}.json`);
+  backupDestaSessao = true; marcarBackupFeito(); atualizarLimpeza(); setMsg('bk-msg','Backup completo baixado.','ok');
+}
+function backupExcel(){
+  if(!isAdm()) return;
+  const wb = XLSX.utils.book_new();
+  const add = (nome, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{}]), nome);
+  add('Lançamentos', db.lancamentos.map(l => ({Data:l.data, Módulo:l.modulo, Campus:l.campus || '', Código:l.codigo, Departamento:l.departamento, Produto:l.produto || '', 'Histórico':l.servico || '', Unidade:l.unidade || '', Valor:l.valor})));
+  add('Departamentos', db.departamentos.map(d => ({Campus:d.campus, Código:d.codigo, Nome:d.nome})));
+  add('Módulos', db.modulos.map(m => ({Nome:m.nome, 'Usa unidade':m.unidade ? 'Sim' : 'Não', 'Campus fixo':m.campusFixo || ''})));
+  add('Produtos', Object.entries(db.produtos).flatMap(([mid, lista]) => lista.map(p => ({Módulo:(findModulo(mid) || {}).nome || mid, Produto:p.nome}))));
+  add('Usuários', db.profiles.map(p => ({Nome:p.nome, 'E-mail':p.email, Nível:NIVEIS[p.nivel] || p.nivel, Ativo:p.ativo ? 'Sim' : 'Não'})));
+  XLSX.writeFile(wb, `backup_sistema_${stampArquivo()}.xlsx`);
+  marcarBackupFeito(); setMsg('bk-msg','Planilha de backup baixada.','ok');
+}
+function renderBackupInfo(){
+  const box = $('bk-stats'); if(!box) return;
+  atualizarLimpeza();
+  const itens = [['Lançamentos', db.lancamentos.length], ['Departamentos', db.departamentos.length], ['Módulos', db.modulos.length], ['Usuários', db.profiles.length]];
+  box.innerHTML = itens.map(i => `<div class="stat"><span>${i[0]}</span><b>${i[1]}</b></div>`).join('');
+  let ultimo = null; try{ ultimo = localStorage.getItem('sg_last_backup'); }catch(e){}
+  $('bk-last').textContent = ultimo ? 'Último backup feito neste navegador: ' + new Date(ultimo).toLocaleString('pt-BR') + '.' : 'Nenhum backup feito ainda neste navegador.';
+}
+function lembrarBackup(){
+  if(!isAdm()) return;
+  let ultimo = null; try{ ultimo = localStorage.getItem('sg_last_backup'); }catch(e){}
+  const dias = ultimo ? (Date.now() - new Date(ultimo).getTime()) / 86400000 : Infinity;
+  if(dias > BACKUP_DIAS_AVISO) toast(ultimo ? `Faz ${Math.floor(dias)} dias desde o último backup. Vá em Backup e baixe uma cópia.` : 'Você ainda não fez backup. Vá em Backup e baixe uma cópia.', 'warn');
+}
+function atualizarLimpeza(){
+  const btn = $('lp-btn'); if(!btn) return;
+  const algum = document.querySelectorAll('.lp-check:checked').length > 0;
+  const ok = isAdm() && backupDestaSessao && algum && $('lp-confirma').value.trim() === 'APAGAR';
+  btn.disabled = !ok;
+  const st = $('lp-status');
+  st.textContent = backupDestaSessao ? '' : 'Baixe o backup completo (.json) acima para liberar a limpeza.';
+  st.className = 'msg warn';
+}
+async function apagarEmLotes(tabela, ids){
+  let apagados = 0;
+  for(let i = 0; i < ids.length; i += 200){
+    const {data, error} = await sb.from(tabela).delete().in('id', ids.slice(i, i + 200)).select('id');
+    if(error) throw new Error(tabela + ': ' + error.message);
+    apagados += data.length;
+  }
+  if(apagados < ids.length) throw new Error(`${tabela}: só ${apagados} de ${ids.length} registros foram apagados (verifique as permissões no Supabase).`);
+  return apagados;
+}
+async function limparDados(){
+  if(!isAdm()){ toast('Somente administradores podem limpar dados.','warn'); return; }
+  if(!backupDestaSessao){ toast('Baixe o backup completo antes de limpar.','warn'); return; }
+  const sel = [...document.querySelectorAll('.lp-check:checked')].map(c => c.value);
+  if(!sel.length || $('lp-confirma').value.trim() !== 'APAGAR') return;
+  const qtd = {lancamentos:db.lancamentos.length, departamentos:db.departamentos.length, produtos:Object.values(db.produtos).flat().length};
+  const resumo = sel.map(k => `${qtd[k]} ${k}`).join(', ');
+  if(!confirm(`Apagar definitivamente ${resumo}?\n\nEsta ação não pode ser desfeita (só restaurando o backup).`)) return;
+  const msg = $('lp-msg'); msg.textContent = 'Apagando...'; msg.className = 'msg';
+  try{
+    if(sel.includes('lancamentos')){ await apagarEmLotes('lancamentos', db.lancamentos.map(l => l.id)); db.lancamentos = []; }
+    if(sel.includes('produtos')){ await apagarEmLotes('produtos', Object.values(db.produtos).flat().map(p => p.id)); db.produtos = {}; }
+    if(sel.includes('departamentos')){ await apagarEmLotes('departamentos', db.departamentos.map(d => d.id)); db.departamentos = []; }
+    msg.textContent = '';
+    toast('Dados apagados: ' + resumo + '.', 'ok');
+  }catch(err){
+    msg.textContent = 'Erro: ' + (err.message || err); msg.className = 'msg warn';
+    toast('A limpeza não foi concluída.', 'warn');
+    try{ await loadAll(); }catch(e){}
+  }
+  document.querySelectorAll('.lp-check').forEach(c => c.checked = false);
+  $('lp-confirma').value = '';
+  renderAll(); renderBackupInfo(); atualizarLimpeza();
+}
+async function upsertEmLotes(tabela, linhas){
+  for(let i = 0; i < linhas.length; i += 500){
+    const {error} = await sb.from(tabela).upsert(linhas.slice(i, i + 500), {onConflict:'id'});
+    if(error) throw new Error(tabela + ': ' + error.message);
+  }
+}
+async function restaurarBackup(evt){
+  if(!isAdm()) return;
+  const file = evt.target.files[0]; if(!file) return;
+  const msg = t => { $('bk-rest-msg').textContent = t; };
+  try{
+    const b = JSON.parse(await file.text());
+    if(!b || b.sistema !== 'Sistema de Gestão' || !Array.isArray(b.lancamentos)) throw new Error('arquivo não é um backup deste sistema.');
+    const resumo = `${(b.modulos || []).length} módulo(s), ${(b.departamentos || []).length} departamento(s), ${(b.produtos || []).length} produto(s) e ${b.lancamentos.length} lançamento(s)`;
+    if(!confirm(`Restaurar backup de ${new Date(b.geradoEm).toLocaleString('pt-BR')}?\n\n${resumo}.\n\nRegistros existentes com o mesmo ID serão sobrescritos; nada será apagado.`)){ evt.target.value = ''; return; }
+    msg('Restaurando...');
+    await upsertEmLotes('modulos', (b.modulos || []).map(m => ({id:m.id, nome:m.nome, unidade:m.unidade, campus_fixo:m.campus_fixo})));
+    await upsertEmLotes('departamentos', b.departamentos || []);
+    await upsertEmLotes('produtos', b.produtos || []);
+    await upsertEmLotes('lancamentos', b.lancamentos);
+    // configuração do Excel contábil: tenta gravar no servidor; sempre guarda cópia local
+    const cfgs = Object.assign({}, b.config_contabil_local || {});
+    for(const m of (b.modulos || [])){
+      if(!m.cfg_contabil) continue;
+      cfgs[m.id] = m.cfg_contabil;
+      await sb.from('modulos').update({cfg_contabil:m.cfg_contabil}).eq('id', m.id);   // ignora erro se a coluna ainda não existir
+    }
+    try{ localStorage.setItem('sg_cfg_contabil', JSON.stringify(cfgs)); }catch(e){}
+    await loadAll(); renderAll(); renderBackupInfo();
+    msg(''); toast('Backup restaurado: ' + resumo + '.', 'ok');
+  }catch(err){ msg('Não foi possível restaurar: ' + (err.message || err)); toast('Falha ao restaurar o backup.', 'warn'); }
+  evt.target.value = '';
+}
+
 /* ---------- navegação (mantida) ---------- */
 function showView(id){
+  if((id === 'v-backup' || id === 'v-usuarios' || id === 'v-cadastrar-modulo') && !isAdm()) id = 'v-dashboard';
   document.body.classList.remove('nav-open');
   document.querySelectorAll('section.view').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('#sidebar button').forEach(b=>b.classList.remove('active'));
@@ -865,6 +1208,7 @@ function showView(id){
     renderModulosList();
   }
   if(id === 'v-usuarios') renderUsuarios();
+  if(id === 'v-backup') renderBackupInfo();
   if(id === 'v-dashboard') renderDashboard();
 }
 
@@ -940,11 +1284,11 @@ function selectRelatorio(tipo){
 
   if(tipo === 'contabil'){
     titleElem.textContent = 'Relatório Excel — Contábil';
-    descElem.textContent = 'Gera uma planilha com Produtos nas linhas (ou o histórico, quando não houver produto) e Departamentos nas colunas, com os totais.';
+    descElem.textContent = 'Gera a planilha no layout contábil (Conta; Subconta; 10; Código do departamento; Restrição; Valor; N; Histórico), configurável para cada módulo.';
     btnExport.textContent = 'Exportar Excel Contábil';
   } else if(tipo === 'detalhado'){
     titleElem.textContent = 'Relatório Excel — Detalhado';
-    descElem.textContent = 'Gera uma planilha detalhada campo a campo com um lançamento por linha.';
+    descElem.textContent = 'Gera uma planilha com um lançamento por linha, com todas as informações do lançamento.';
     btnExport.textContent = 'Exportar Excel Detalhado';
   } else if(tipo === 'pdf'){
     titleElem.textContent = 'Relatório em PDF';
@@ -953,6 +1297,13 @@ function selectRelatorio(tipo){
   }
 
   document.getElementById('r-msg').textContent = '';
+  const ehContabil = tipo === 'contabil';
+  $('opts-contabil').style.display = ehContabil ? 'flex' : 'none';
+  $('card-cfg-contabil').style.display = ehContabil ? '' : 'none';
+  if(ehContabil){
+    const o = optsContabil(); $('opt-cabecalho').checked = o.cabecalho; $('opt-totalizar').checked = o.totalizar;
+    renderCfgContabil();
+  }
   renderRelatorioPreview();
 }
 
@@ -1033,7 +1384,7 @@ try{ setTheme(localStorage.getItem('sg_theme') || 'dark'); }catch(e){ setTheme('
 /* ---------- init ---------- */
 function renderAll(){
   renderDepts(); renderModSubnav(); fillModuloReportSelect(); renderRelatorioPreview();
-  renderModulosList(); fillProdModuloSelect(); renderProdutos(); renderUsuarios();
+  renderModulosList(); fillProdModuloSelect(); renderProdutos(); renderUsuarios(); renderCfgContabil();
 }
 if(!CONFIGURADO){ $('cfg-warn').style.display = 'block'; }
 else{
